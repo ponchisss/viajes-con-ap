@@ -1,0 +1,247 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Planificador de Viajes con IA</title>
+    <!-- Tailwind CSS para el diseño -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Fuentes e Iconos -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    
+    <style>
+        body { font-family: 'Inter', sans-serif; }
+        .glass-panel {
+            background: rgba(255, 255, 255, 0.9);
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+        }
+        /* Animación de carga para simular el tiempo de respuesta de la API */
+        .loader {
+            border: 4px solid #f3f3f3;
+            border-top: 4px solid #3b82f6;
+            border-radius: 50%;
+            width: 40px;
+            height: 40px;
+            animation: spin 1s linear infinite;
+        }
+        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+        
+        .fade-in { animation: fadeIn 0.5s ease-in; }
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+    </style>
+</head>
+<body class="bg-gradient-to-br from-blue-50 to-indigo-100 min-h-screen text-slate-800 p-4 md:p-8">
+
+    <div class="max-w-3xl mx-auto space-y-8">
+        
+        <!-- Encabezado -->
+        <header class="text-center space-y-2 fade-in">
+            <div class="inline-block bg-blue-100 text-blue-600 p-3 rounded-full mb-2">
+                <i class="fa-solid fa-plane-departure text-2xl"></i>
+            </div>
+            <h1 class="text-3xl md:text-4xl font-bold text-slate-900">Asistente de Viajes IA</h1>
+            <p class="text-slate-500">Planifica tu día perfecto combinando clima, lugares y preferencias.</p>
+        </header>
+
+        <!-- Formulario de Entrada -->
+        <main class="glass-panel rounded-2xl shadow-xl p-6 md:p-8 fade-in" style="animation-delay: 0.1s;">
+            <form id="travelForm" class="space-y-6">
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    
+                    <!-- Destino -->
+                    <div class="space-y-2">
+                        <label class="block text-sm font-semibold text-slate-700">Ciudad Destino</label>
+                        <div class="relative">
+                            <i class="fa-solid fa-location-dot absolute left-3 top-3.5 text-slate-400"></i>
+                            <input type="text" id="destination" required placeholder="Ej. Quito, Madrid, Tokyo" 
+                                class="w-full pl-10 pr-4 py-3 rounded-xl border border-slate-200 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all outline-none">
+                        </div>
+                    </div>
+
+                    <!-- Estilo de Viaje -->
+                    <div class="space-y-2">
+                        <label class="block text-sm font-semibold text-slate-700">Intereses Principales</label>
+                        <div class="relative">
+                            <i class="fa-solid fa-heart absolute left-3 top-3.5 text-slate-400"></i>
+                            <select id="interests" class="w-full pl-10 pr-4 py-3 rounded-xl border border-slate-200 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all outline-none bg-white">
+                                <option value="cultura">Cultura y Museos</option>
+                                <option value="naturaleza">Naturaleza y Parques</option>
+                                <option value="gastronomia">Gastronomía local</option>
+                                <option value="aventura">Aventura y Acción</option>
+                            </select>
+                        </div>
+                    </div>
+                </div>
+
+                <button type="submit" id="submitBtn" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-semibold py-3 px-6 rounded-xl transition-all shadow-md hover:shadow-lg flex justify-center items-center gap-2">
+                    <i class="fa-solid fa-wand-magic-sparkles"></i>
+                    <span>Generar Itinerario Inteligente</span>
+                </button>
+            </form>
+        </main>
+
+        
+        <!-- Estado de Carga (Oculto por defecto) -->
+        <div id="loadingState" class="hidden flex-col items-center justify-center space-y-4 py-12">
+            <div class="loader"></div>
+            <p class="text-slate-500 font-medium text-center animate-pulse">
+                Consultando clima... <br>
+                Buscando lugares... <br>
+                Gemini está diseñando tu ruta...
+            </p>
+        </div>
+
+        <!-- Contenedor de Resultados (Oculto por defecto) -->
+        <div id="resultsContainer" class="hidden space-y-6 fade-in">
+            
+            <!-- Tarjeta de Contexto (Clima) -->
+            <div class="bg-indigo-50 border border-indigo-100 rounded-xl p-4 flex items-center gap-4">
+                <div class="bg-indigo-100 p-3 rounded-lg text-indigo-600">
+                    <i id="weatherIcon" class="fa-solid fa-cloud-rain text-xl"></i>
+                </div>
+                <div>
+                    <h3 class="font-semibold text-slate-800 text-sm">Contexto Actual</h3>
+                    <p id="weatherText" class="text-sm text-slate-600">Lluvia ligera, 18°C. Se priorizarán actividades en interiores.</p>
+                </div>
+            </div>
+
+            <!-- Itinerario Generado -->
+            <div class="glass-panel rounded-2xl shadow-lg p-6 md:p-8">
+                <h2 class="text-2xl font-bold text-slate-800 mb-6 border-b pb-4">Tu Itinerario</h2>
+                
+                <!-- Línea de tiempo -->
+                <div id="timeline" class="space-y-8 relative before:absolute before:inset-0 before:ml-5 before:-translate-x-px md:before:mx-auto md:before:translate-x-0 before:h-full before:w-0.5 before:bg-gradient-to-b before:from-transparent before:via-slate-300 before:to-transparent">
+                    <!-- Los items del itinerario se inyectarán aquí mediante JS -->
+                </div>
+            </div>
+
+            <!-- Consejos Extra -->
+            <div class="bg-amber-50 border border-amber-200 rounded-xl p-5 shadow-sm">
+                <h3 class="font-bold text-amber-800 mb-2 flex items-center gap-2">
+                    <i class="fa-solid fa-lightbulb"></i> Consejos de Gemini
+                </h3>
+                <p id="extraTips" class="text-amber-900 text-sm"></p>
+            </div>
+            
+            <button onclick="resetApp()" class="w-full bg-white text-slate-600 hover:bg-slate-50 font-semibold py-3 px-6 rounded-xl transition-all shadow-sm border border-slate-200 mt-4">
+                Planificar otro viaje
+            </button>
+        </div>
+
+    </div>
+
+    <script>
+        // Referencias a elementos del DOM
+        const form = document.getElementById('travelForm');
+        const submitBtn = document.getElementById('submitBtn');
+        const loadingState = document.getElementById('loadingState');
+        const resultsContainer = document.getElementById('resultsContainer');
+        const timeline = document.getElementById('timeline');
+        const extraTips = document.getElementById('extraTips');
+
+        // Manejador del evento Submit
+        form.addEventListener('submit', function(e) {
+            e.preventDefault();
+            
+            const destination = document.getElementById('destination').value;
+            const interests = document.getElementById('interests').value;
+
+            // 1. Mostrar estado de carga y ocultar formulario
+            form.closest('main').classList.add('hidden');
+            loadingState.classList.remove('hidden');
+            loadingState.classList.add('flex');
+
+            // ----------------------------------------------------------------------
+            // AQUI IRÍA TU CÓDIGO REAL DE INTEGRACIÓN API (EJEMPLO CONCEPTUAL):
+            // 
+            // fetch('http://tu-servidor-python.com/api/planificar', {
+            //     method: 'POST',
+            //     body: JSON.stringify({ ciudad: destination, preferencias: interests })
+            // })
+            // .then(response => response.json())
+            // .then(data => mostrarResultados(data))
+            // ----------------------------------------------------------------------
+
+            // 2. Simulación de la respuesta estructurada de Gemini (JSON)
+            // Esto emula exactamente lo que le pedimos a Gemini en el System Prompt
+            setTimeout(() => {
+                const mockGeminiResponse = {
+                    clima_usado: "Lluvia ligera, 18°C",
+                    itinerario: [
+                        {
+                            momento: "Mañana",
+                            icon: "fa-mug-hot",
+                            actividad: "Museo de la Ciudad y Café Histórico",
+                            razon: "Ideal para evitar la lluvia matutina. Iniciamos en interiores conociendo la historia local."
+                        },
+                        {
+                            momento: "Tarde",
+                            icon: "fa-utensils",
+                            actividad: "Almuerzo en Mercado Techado y Galerías de Arte",
+                            razon: "La gastronomía local es excelente aquí, y nos mantenemos a resguardo de la lluvia antes de ver arte local."
+                        },
+                        {
+                            momento: "Noche",
+                            icon: "fa-moon",
+                            actividad: "Cena panorámica en restaurante acristalado",
+                            razon: "Disfruta de las vistas nocturnas de la ciudad sin preocuparte por el clima exterior."
+                        }
+                    ],
+                    consejos_extra: "Dado el pronóstico de lluvia, te recomiendo llevar calzado antideslizante y un paraguas resistente. Los tiempos de traslado en taxi pueden ser un poco más largos de lo habitual."
+                };
+
+                renderItinerary(mockGeminiResponse, destination);
+            }, 3000); // Simulamos 3 segundos de procesamiento de las 3 APIs
+        });
+
+        function renderItinerary(data, city) {
+            // Ocultar carga
+            loadingState.classList.add('hidden');
+            loadingState.classList.remove('flex');
+            
+            // Limpiar timeline
+            timeline.innerHTML = '';
+
+            // Llenar datos
+            document.getElementById('weatherText').innerHTML = `<strong>${city}:</strong> ${data.clima_usado}. Se priorizarán actividades adaptadas a estas condiciones.`;
+            extraTips.innerText = data.consejos_extra;
+
+            // Generar HTML para cada item del itinerario
+            data.itinerario.forEach((item, index) => {
+                // Alternar alineación para diseño en zigzag en escritorio
+                const isLeft = index % 2 === 0;
+                
+                const timelineItem = `
+                    <div class="relative flex items-center justify-between md:justify-normal md:odd:flex-row-reverse group is-active">
+                        <!-- Icono central -->
+                        <div class="flex items-center justify-center w-10 h-10 rounded-full border-4 border-white bg-blue-500 text-white shadow shrink-0 md:order-1 md:group-odd:-translate-x-1/2 md:group-even:translate-x-1/2 z-10">
+                            <i class="fa-solid ${item.icon}"></i>
+                        </div>
+                        
+                        <!-- Tarjeta de contenido -->
+                        <div class="w-[calc(100%-4rem)] md:w-[calc(50%-2.5rem)] p-4 rounded-xl border border-slate-100 bg-white shadow-sm hover:shadow-md transition-shadow">
+                            <div class="flex items-center justify-between mb-1">
+                                <span class="font-bold text-blue-600 text-sm tracking-wide uppercase">${item.momento}</span>
+                            </div>
+                            <h4 class="font-bold text-lg text-slate-800 mb-2">${item.actividad}</h4>
+                            <p class="text-slate-600 text-sm leading-relaxed">${item.razon}</p>
+                        </div>
+                    </div>
+                `;
+                timeline.insertAdjacentHTML('beforeend', timelineItem);
+            });
+
+            // Mostrar resultados con animación
+            resultsContainer.classList.remove('hidden');
+        }
+
+        function resetApp() {
+            resultsContainer.classList.add('hidden');
+            form.closest('main').classList.remove('hidden');
+            form.reset();
+        }
+    </script>
+</body>
+</html>
